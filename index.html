@@ -716,23 +716,29 @@ async function getAds(range, campaignId = null) {
 // ─── PARSE HELPERS ────────────────────────────────────────
 function getLeads(actions) {
   if (!actions) return null;
-  const keys = ['lead','onsite_conversion.lead_grouped','offsite_conversion.custom.845363071973885'];
-  let total = 0, found = false;
-  for (const a of actions) {
-    if (keys.includes(a.action_type) || a.action_type.startsWith('offsite_conversion.custom')) {
-      total += parseFloat(a.value || 0); found = true;
-    }
+  // 'lead' é o TOTAL oficial do Meta (já inclui formulários instantâneos
+  // e leads do site) — é o número que aparece no Gestor de Anúncios.
+  // NUNCA somar com os outros tipos, senão conta a dobrar.
+  const exact = actions.find(a => a.action_type === 'lead');
+  if (exact) return parseFloat(exact.value || 0);
+  // Fallbacks (usa apenas UM, por ordem de prioridade, sem somar):
+  const fallbacks = ['onsite_conversion.lead_grouped', 'leadgen_grouped', 'offsite_conversion.fb_pixel_lead'];
+  for (const k of fallbacks) {
+    const f = actions.find(a => a.action_type === k);
+    if (f) return parseFloat(f.value || 0);
   }
-  return found ? total : null;
+  const custom = actions.find(a => a.action_type.startsWith('offsite_conversion.custom'));
+  if (custom) return parseFloat(custom.value || 0);
+  return null;
 }
 
 function getCPL(cpa) {
   if (!cpa) return null;
-  for (const a of cpa) {
-    if (a.action_type.includes('lead') || a.action_type.startsWith('offsite_conversion.custom'))
-      return parseFloat(a.value || 0);
-  }
-  return null;
+  // Mesmo critério: prioridade ao CPL oficial do action type 'lead'.
+  const exact = cpa.find(a => a.action_type === 'lead');
+  if (exact) return parseFloat(exact.value || 0);
+  const f = cpa.find(a => a.action_type.includes('lead') || a.action_type.startsWith('offsite_conversion.custom'));
+  return f ? parseFloat(f.value || 0) : null;
 }
 
 function insightsOf(e) {
